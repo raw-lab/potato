@@ -1,0 +1,168 @@
+#!/bin/bash
+
+#SBATCH --partition=Draco
+#SBATCH --job-name=Potato_BWA
+#SBATCH --nodes=9
+#SBATCH --tasks-per-node=1
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=100GB
+#SBATCH --time=1-0
+#SBATCH -o slurm-%x-%j.out
+#SBATCH --mail-type=END,FAIL,REQUEUE
+
+########## README ##########
+# potato_sbatch.sh
+# This script utilizes SLURM on a cluster to speed up processing.
+
+# porechop   0.2.4
+# bwa        0.7.17-r1188
+# samtools   1.10 (using htslib 1.10)
+# python
+# pandas
+############################
+
+
+echo "====================================================="
+echo "Start Time  : $(date)"
+echo "Submit Dir  : $SLURM_SUBMIT_DIR"
+echo "Job ID/Name : $SLURM_JOBID / $SLURM_JOB_NAME"
+echo "Node List   : $SLURM_JOB_NODELIST"
+echo "Num Tasks   : $SLURM_NTASKS total [$SLURM_NNODES nodes @ $SLURM_CPUS_ON_NODE CPUs/node]"
+echo "======================================================"
+echo ""
+
+# Track the time it takes to run the script
+SECONDS=0
+
+# Load dependencies
+module load bwa
+module load samtools
+# Porechop is in an Anaconda environment since it was not pre-installed in my cluster.
+module load anaconda3
+eval "$(conda shell.bash hook)"
+conda activate /projects/raw_lab/envs/aligners
+
+
+# CPUs per node to use with BWA/Graphmap
+CPUS=$SLURM_CPUS_ON_NODE
+
+# Location of the database files
+DB_POTATO=database/potato_db.fasta
+DB_PATHOGEN=database/St_path_db.fasta
+
+# main output directory
+OUTPATH=$SLURM_JOB_NAME
+
+# location of the stats file to write to
+STATS=$OUTPATH/stats_bwa.txt
+
+# List of files to process
+FILE_LIST=(samples/*.fastq)
+
+echo "====================================================="
+echo "Trimming Files                              : $(date)"
+echo "====================================================="
+for FILE in ${FILE_LIST[@]}
+do
+    # basename of the sample file
+    name=$(basename $FILE .fastq)
+    # results folder for the sample
+    RESULTS=$OUTPATH/$name
+    mkdir -p $RESULTS
+    # output trimmed file
+    TRIMMED=$RESULTS/potato_trimmed.fastq
+
+    # start porechop on an available node
+    srun --nodes=1 --ntasks=1 \
+        porechop -t $CPUS --middle_threshold 75 --require_two_barcodes -i $FILE -o $TRIMMED > $RESULTS/poreshop.log &
+done
+wait # wait for all jobs to finish before moving on
+
+
+echo "====================================================="
+echo "Mapping to Potato                           : $(date)"
+echo "====================================================="
+for FILE in ${FILE_LIST[@]}
+do
+    name=$(basename $FILE .fastq)
+    RESULTS=$OUTPATH/$name
+    # input trimmed file
+    TRIMMED=$RESULTS/potato_trimmed.fastq
+    # output unmapped fastq file
+    UNMAPPED=$RESULTS/potato_unmapped.fastq
+
+    # start BWA on a node,
+    # save the log file,
+    # save the BAM file (for stats later),
+    # and export the unmapped regions to a FASTQ file
+    srun --nodes=1 --ntasks=1 \
+        bwa mem -t $CPUS -x ont2d $DB_POTATO $TRIMMED 2> $RESULTS/potato.log | \
+        samtools view -b - | tee $RESULTS/potato.bam | \
+        samtools fastq -f 4 - > $UNMAPPED &
+
+done
+wait
+
+
+echo "====================================================="
+echo "Mapping to pathogen DB              :       : $(date)"
+echo "====================================================="
+for FILE in ${FILE_LIST[@]}
+do
+    name=$(basename $FILE .fastq)
+    RESULTS=$OUTPATH/$name
+    # input unmapped file
+    UNMAPPED=$RESULTS/potato_unmapped.fastq
+
+    # start BWA on a node,
+    # save the log file,
+    # save the BAM file (for stats later),
+    srun --nodes=1 --ntasks=1 \
+        bwa mem -t $CPUS -x ont2d $DB_PATHOGEN $UNMAPPED 2> $RESULTS/pathogen.log | \
+        samtools view -b - > $RESULTS/pathogen.bam &
+
+done
+wait
+
+
+echo "====================================================="
+echo "Gathering stats                             : $(date)"
+echo "====================================================="
+
+printf "" > $STATS
+for FILE in ${FILE_LIST[@]}
+do
+    name=$(basename $FILE .fastq)
+    RESULTS=$OUTPATH/$name
+    TRIMMED=$RESULTS/potato_trimmed.fastq
+    UNMAPPED=$RESULTS/potato_unmapped.fastq
+
+    count=$(awk '{s++}END{print s/4}' $TRIMMED)
+    potato_reads=$(samtools view -F 4 $RESULTS/potato.bam | cut -d $'\t' -f 1 | sort | uniq | wc -l)
+    unmapped_reads=$(awk '{s++}END{print s/4}' $UNMAPPED)
+    pathogen_match=$(samtools view -F 4 $RESULTS/pathogen.bam | cut -d $'\t' -f 1 | sort | uniq | wc -l )
+
+    unmatched=$(samtools view -f 4 $RESULTS/pathogen.bam | cut -d $'\t' -f 1 | sort | uniq | wc -l )
+    echo Sequences in $name: $count >> $STATS
+    echo Mapped potato reads: $potato_reads >> $STATS
+    echo Unmapped potato reads: $unmapped_reads >> $STATS
+    echo Mapped pathogen reads: $pathogen_match >> $STATS
+    echo Unmapped reads: $unmatched >> $STATS
+
+    echo "Matched pathogen counts: $name" >> $STATS
+    while read line; do
+        abv=${line:0:7}
+        count=$(samtools view -F 4 $RESULTS/pathogen.bam | grep $abv | cut -d $'\t' -f 1 | sort | uniq | wc -l)
+        echo "  $abv:$count" >> $STATS
+    done <pathogen_list.txt
+
+done
+
+./parse_stats.py $STATS $OUTPATH/$(basename $STATS .txt).tsv
+
+echo ""
+echo "======================================================"
+echo "End Time   : $(date)"
+echo "Ran in $SECONDS seconds"
+echo "======================================================"
+echo ""
