@@ -1,9 +1,0 @@
-	clean_soil_DNA_FAO38935	cleansoil_flongle_DNA_AGE664	DNAsoilfloAJA479	DNAsoilfloAJC256	DNAsoilfloFAL61026	DNAsoilfloFAN24302	soil_flongle_cDNA_AIK045	soil_flongle_DNA_AGB452	tuber_flongle_cDNA_AIG433
-total sequences (count)	368657	40794	37859	36015	1226462	709522	9773	12034	320602
-Total mapped to potato (counts)	21085	2289	4541	6515	53590	60782	7018	569	318810
-Sequences post potato removal (counts)	347572	38505	33318	29500	1172872	648740	2755	11465	1792
-Sequences that mapped to pathogens (counts)	0	0	1	3	64	3	0	12	3
-Sequences that didn't match to anything	325522	31969	27796	23904	1111514	509039	2613	10402	1743
-% total reads to potato	5.72	5.61	11.99	18.09	4.37	8.57	71.81	4.73	99.44
-% total reads to pathogens (post potato removal)	0	0	0	0.01	0.01	0	0	0.1	0.17
-% that didn't map to potato or pathogen	88.3	78.37	73.42	66.37	90.63	71.74	26.74	86.44	0.54
