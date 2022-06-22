@@ -10,7 +10,7 @@ Journal Article is: Lauren B. Braley, Jeremy B. Jewell, Jodi L. Humann, Dorrie M
 **Analysis**
 
 This repo holds scripts to process data and build graphs. Outputs, results, and figures are included as well in this repo. 
-Doc has detail methods and steps to recreate the mapping analysis. 
+Doc has detailed methods and steps to recreate the mapping analysis. 
 
 **Data**
 
