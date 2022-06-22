@@ -16,6 +16,6 @@ Doc has detail methods and steps to recreate the mapping analysis.
 
 The informatics point-of-contact for this project is [Dr. Richard Allen White III](https://github.com/raw937). <br />
 If you have any questions or feedback, please feel free to get in touch by email. <br />
-Dr. Richard Allen White III - raw937@gmail.com or rwhit101@uncc.edu <br />
+[Dr. Richard Allen White III](raw937@gmail.com) <br />
 [Jose Figueroa](https://github.com/decrevi).
 Or [open an issue](https://github.com/raw-lab/potato/issues).
