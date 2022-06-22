@@ -4,8 +4,8 @@ Manuscript is currently in review
 
 This is the code and analysis for this article. 
 
-Journal Article is: Lauren B. Braley, Jeremy B. Jewell, Jodi L. Humann, Dorrie Main, Guadalupe A. Mora-Romero, Natalia Moroz, James W. Woodhall, Jose Figueroa, Richard Allen White III and Kiwamu Tanaka<br />
-**Nanopore sequencing with GraphMap for comprehensive pathogen detection in potato field soil** <br />
+Journal Article is: ***Nanopore sequencing with GraphMap for comprehensive pathogen detection in potato field soil*** <br />
+Lauren B. Braley, Jeremy B. Jewell, Jodi L. Humann, Dorrie Main, Guadalupe A. Mora-Romero, Natalia Moroz, James W. Woodhall, Jose Figueroa, Richard Allen White III and Kiwamu Tanaka<br />
 
 **Analysis**
 
