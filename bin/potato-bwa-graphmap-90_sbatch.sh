@@ -2,11 +2,11 @@
 
 #SBATCH --partition=Orion
 #SBATCH --job-name=Potato_bwa-graphmap-90
-#SBATCH --nodes=5
+#SBATCH --nodes=4
 #SBATCH --tasks-per-node=1
-#SBATCH --cpus-per-task=48
+#SBATCH --cpus-per-task=32
 #SBATCH --mem=100GB
-#SBATCH --time=1-0
+#SBATCH --time=10-0
 #SBATCH -o slurm-%x-%j.out
 #SBATCH --mail-type=END,FAIL,REQUEUE
 
@@ -78,8 +78,8 @@ do
     TRIMMED=$RESULTS/potato_trimmed.fastq
 
     # start porechop on an available node
-#    srun --nodes=1 --ntasks=1 --quiet \
-#        porechop -t $CPUS --middle_threshold 75 --require_two_barcodes -i $FILE -o $TRIMMED > $RESULTS/poreshop.log &
+    srun --nodes=1 --ntasks=1 --quiet \
+        porechop -t $CPUS --middle_threshold 75 --require_two_barcodes -i $FILE -o $TRIMMED > $RESULTS/poreshop.log &
 done
 wait # wait for all jobs to finish before moving on
 
@@ -100,10 +100,10 @@ do
     # save the log file,
     # save the BAM file (for stats later),
     # and export the unmapped regions to a FASTQ file
-#    srun --nodes=1 --ntasks=1 --quiet \
-#        bwa mem -t $CPUS -x ont2d $DB_POTATO $TRIMMED 2> $RESULTS/potato.log | \
-#        samtools view -b - | tee $RESULTS/potato.bam | \
-#        samtools fastq -f 4 - > $UNMAPPED &
+    srun --nodes=1 --ntasks=1 --quiet \
+        bwa mem -t $CPUS -x ont2d $DB_POTATO $TRIMMED 2> $RESULTS/potato.log | \
+        samtools view -b - | tee $RESULTS/potato.bam | \
+        samtools fastq -f 4 - > $UNMAPPED &
 done
 wait
 
@@ -123,9 +123,9 @@ do
     # start Graphmap on a node,
     # save the log file,
     # save the BAM file (for stats later),
-#    srun --nodes=1 --ntasks=1 --quiet \
-#        graphmap align -t $CPUS -z $EVAL -r $DB_PATHOGEN -d $UNMAPPED -o /dev/stdout 2> $RESULTS/pathogen.log | \
-#        samtools view -b - > $PATHOGEN &
+    srun --nodes=1 --ntasks=1 --quiet \
+        graphmap align -t $CPUS -z $EVAL -r $DB_PATHOGEN -d $UNMAPPED -o /dev/stdout 2> $RESULTS/pathogen.log | \
+        samtools view -b - > $PATHOGEN &
 done
 wait
 

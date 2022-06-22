@@ -1,12 +1,12 @@
 #!/bin/bash
 
-#SBATCH --partition=Draco
+#SBATCH --partition=Orion
 #SBATCH --job-name=Potato_bwa-blast-word_size
-#SBATCH --nodes=9
+#SBATCH --nodes=4
 #SBATCH --tasks-per-node=1
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=32
 #SBATCH --mem=100GB
-#SBATCH --time=1-0
+#SBATCH --time=10-0
 #SBATCH -o slurm-%x-%j.out
 #SBATCH --mail-type=END,FAIL,REQUEUE
 

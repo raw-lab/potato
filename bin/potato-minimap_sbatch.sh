@@ -1,19 +1,19 @@
 #!/bin/bash
 
-#SBATCH --partition=Andromeda
+#SBATCH --partition=Orion
 #SBATCH --job-name=Potato_Minimap
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node=1
-#SBATCH --cpus-per-task=64
-#SBATCH --mem=128GB
-#SBATCH --time=1-0
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=100GB
+#SBATCH --time=10-0
 #SBATCH -o slurm-%x-%j.out
 #SBATCH --mail-type=END,FAIL,REQUEUE
 
 ########## README ##########
 # potato_sbatch.sh
 # This script utilizes SLURM on a cluster to speed up processing.
-# This was one of the first runs, I had not yet optimized it for multiple nodes
+# This was one of the first runs, it is not yet optimized it for multiple nodes
 
 # porechop   0.2.4
 # minimap2   2.18-r1035-dirty
@@ -30,6 +30,9 @@ echo "Node List   : $SLURM_JOB_NODELIST"
 echo "Num Tasks   : $SLURM_NTASKS total [$SLURM_NNODES nodes @ $SLURM_CPUS_ON_NODE CPUs/node]"
 echo "======================================================"
 echo ""
+
+# Track the time it takes to run the script
+SECONDS=0
 
 module load samtools
 module load minimap2
@@ -125,5 +128,5 @@ python parse_stats.py $ONEHIT $(echo $ONEHIT | cut -f 1 -d '.').tsv
 echo ""
 echo "======================================================"
 echo "End Time   : $(date)"
+echo "Ran in $SECONDS seconds"
 echo "======================================================"
-echo ""

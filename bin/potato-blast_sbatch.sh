@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --partition=Orion
-#SBATCH --job-name=Potato_bwa-graphmap-85
+#SBATCH --job-name=Potato_BLASTn
 #SBATCH --nodes=4
 #SBATCH --tasks-per-node=1
 #SBATCH --cpus-per-task=32
@@ -15,9 +15,8 @@
 # This script utilizes SLURM on a cluster to speed up processing.
 
 # porechop   0.2.4
-# bwa        0.7.17-r1188
-# graphmap   0.5.2
-# samtools   1.10 (using htslib 1.10)
+# blast      2.11.0+
+# seqkit     0.16.1
 # python
 # pandas
 ############################
@@ -36,23 +35,26 @@ echo ""
 SECONDS=0
 
 # Load dependencies
-module load bwa
-module load samtools
-# Porechop and Graphmap are in an Anaconda environment since they were not pre-installed in my cluster.
+module load blast
+module load seqkit
+# Porechop is in an Anaconda environment since it was not pre-installed in my cluster.
 module load anaconda3
 eval "$(conda shell.bash hook)"
 conda activate /projects/raw_lab/envs/aligners
+
 
 # CPUs per node to use with BWA/Graphmap
 CPUS=$SLURM_CPUS_ON_NODE
 
 # Location of the database files
-DB_POTATO=database/potato_db.fasta
-DB_PATHOGEN=database/St_path_db.fasta
+DB_BLAST_POTATO_PATHOGEN=database/combined_db
 
-# evalue cutoff for mapping to pathogens
+echo Indexing Databases
+makeblastdb -in database/combined.fasta -dbtype nucl -title Combined -out $DB_BLAST_POTATO_PATHOGEN
+
+
 EVAL="1e-80"
-IDENTITY="85"
+IDENTITY="90"
 
 # main output directory
 OUTPATH=$SLURM_JOB_NAME
@@ -65,7 +67,7 @@ STATS=$OUTPATH/stats_$SLURM_JOB_NAME.txt
 FILE_LIST=(samples/*.fastq)
 
 echo "====================================================="
-echo "Trimming Files (porechop)          : $(date +'%D %T')"
+echo "Trimming Files                              : $(date +%H:%M)"
 echo "====================================================="
 for FILE in ${FILE_LIST[@]}
 do
@@ -75,57 +77,31 @@ do
     RESULTS=$OUTPATH/$name
     mkdir -p $RESULTS
     # output trimmed file
-    TRIMMED=$RESULTS/potato_trimmed.fastq
+    TRIMMED=$RESULTS/$name-trimmed.fastq
 
-    # start porechop on an available node
-    srun --nodes=1 --ntasks=1 --quiet \
+    srun --nodes=1 --ntasks=1 \
         porechop -t $CPUS --middle_threshold 75 --require_two_barcodes -i $FILE -o $TRIMMED > $RESULTS/poreshop.log &
 done
 wait # wait for all jobs to finish before moving on
 
 
 echo "====================================================="
-echo "BWA to Potato (Filtering)      : $(date +'%D %T')"
+echo "BLASTn to pathogen DB using e-value: $EVAL : $(date +'%D %T')"
 echo "====================================================="
 for FILE in ${FILE_LIST[@]}
 do
     name=$(basename $FILE .fastq)
     RESULTS=$OUTPATH/$name
-    # input trimmed file
-    TRIMMED=$RESULTS/potato_trimmed.fastq
-    # output unmapped fastq file
-    UNMAPPED=$RESULTS/potato_unmapped.fastq
+    TRIMMED=$RESULTS/$name-trimmed.fastq
+    # output tsv
+    BLAST_OUT=$RESULTS/pathogen_blast.tsv    
 
-    # start BWA on a node,
-    # save the log file,
-    # save the BAM file (for stats later),
-    # and export the unmapped regions to a FASTQ file
+    # start blastn on a node,
+    # save the TSV file (for stats later),
+    echo -n > $BLAST_OUT
     srun --nodes=1 --ntasks=1 --quiet \
-        bwa mem -t $CPUS -x ont2d $DB_POTATO $TRIMMED 2> $RESULTS/potato.log | \
-        samtools view -b - | tee $RESULTS/potato.bam | \
-        samtools fastq -f 4 - > $UNMAPPED &
-done
-wait
-
-
-echo "====================================================="
-echo "Graphmap to pathogen DB using e-value: $EVAL : $(date +'%D %T')"
-echo "====================================================="
-for FILE in ${FILE_LIST[@]}
-do
-    name=$(basename $FILE .fastq)
-    RESULTS=$OUTPATH/$name
-    # input unmapped file
-    UNMAPPED=$RESULTS/potato_unmapped.fastq
-    # output bam file
-    PATHOGEN=$RESULTS/pathogen.bam
-
-    # start Graphmap on a node,
-    # save the log file,
-    # save the BAM file (for stats later),
-    srun --nodes=1 --ntasks=1 --quiet \
-        graphmap align -t $CPUS -z $EVAL -r $DB_PATHOGEN -d $UNMAPPED -o /dev/stdout 2> $RESULTS/pathogen.log | \
-        samtools view -b - > $PATHOGEN &
+        cat $TRIMMED | seqkit fq2fa | \
+        blastn -num_threads $CPUS -task megablast -word_size 12 -evalue $EVAL -outfmt 6 -db $DB_BLAST_POTATO_PATHOGEN >> $BLAST_OUT &
 done
 wait
 
@@ -139,16 +115,15 @@ for FILE in ${FILE_LIST[@]}
 do
     name=$(basename $FILE .fastq)
     RESULTS=$OUTPATH/$name
-    TRIMMED=$RESULTS/potato_trimmed.fastq
-    UNMAPPED=$RESULTS/potato_unmapped.fastq
-    PATHOGEN=$RESULTS/pathogen.bam
+    TRIMMED=$RESULTS/$name-trimmed.fastq
+    BLAST_OUT=$RESULTS/pathogen_blast.tsv
 
     count=$(awk '{s++}END{print s/4}' $TRIMMED)
-    potato_reads=$(samtools view -F 4 $RESULTS/potato.bam | cut -d $'\t' -f 1 | sort | uniq | wc -l)
-    unmapped_reads=$(awk '{s++}END{print s/4}' $UNMAPPED)
-    pathogen_match=$(samtools view -F 4 $PATHOGEN | ./filter_identity.py $IDENTITY | cut -d $'\t' -f 1 | sort | uniq | wc -l )
-    unmatched=$(samtools view -f 4 $PATHOGEN | cut -d $'\t' -f 1 | sort | uniq | wc -l )
+    potato_reads=0
+    pathogen_match=$(cat $BLAST_OUT | cut -d $'\t' -f 1 | sort | uniq | wc -l)
+    unmapped_reads=$(( count - pathogen_match ))
 
+    unmatched=$(( count - pathogen_match ))
     echo Sequences in $name: $count >> $STATS
     echo Mapped potato reads: $potato_reads >> $STATS
     echo Unmapped potato reads: $unmapped_reads >> $STATS
@@ -156,22 +131,14 @@ do
     echo Unmapped reads: $unmatched >> $STATS
 
     echo "Matched pathogen counts: $name" >> $STATS
-    total=0
     while read line; do
         abv=${line:0:7}
-        if [ $pathogen_match -gt $total ]
-        then
-            count=$(samtools view -F 4 $PATHOGEN | ./filter_identity.py $IDENTITY | grep $abv | cut -d $'\t' -f 1 | sort | uniq | wc -l)
-        else
-            count=0
-        fi
+        count=$(cat $BLAST_OUT | grep $abv | cut -d $'\t' -f 1 | sort | uniq | wc -l)
         echo "  $abv:$count" >> $STATS
-        ((total=total+count))
     done <pathogen_list.txt
 
 done
 
-# Create TSV Table
 ./parse_stats.py $STATS $OUTPATH/$(basename $STATS .txt).tsv
 
 echo ""
@@ -179,3 +146,5 @@ echo "======================================================"
 echo "End Time   : $(date)"
 echo "Ran in $SECONDS seconds"
 echo "======================================================"
+echo ""
+
