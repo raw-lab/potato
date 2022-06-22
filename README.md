@@ -9,6 +9,14 @@ The files included here are in pairs:
 
 ## Tests
 
+### stats_Potato_blast
+
+1) Trim with porechop --middle_threshold 75 --require_two_barcodes
+2) create combined_db from both St_path_db.fasta and Potato sequences
+3) Mapped to combined_db using blastn -task megablast -word_size 12 -evalue 1e-80 -outfmt 6
+4) Stats gathered using: cut -d $'\t' -f 1 | sort | uniq | wc -l
+
+
 ### stats_Potato_bwa
 
 1) Trim with porechop --middle_threshold 75 --require_two_barcodes
